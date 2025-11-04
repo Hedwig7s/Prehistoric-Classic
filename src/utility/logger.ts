@@ -5,7 +5,7 @@
 import pino from "pino";
 import pinoCaller from "pino-caller";
 import PinoPretty from "pino-pretty";
-import * as pathLib from "path";
+import * as pathLib from "node:path";
 
 /**
  * Create a simple logger
@@ -13,33 +13,35 @@ import * as pathLib from "path";
  * @returns The logger
  */
 export function getSimpleLogger(name?: string) {
-    const level = process.env.LOG_LEVEL?.toLowerCase() || "info";
-    const debug =
-        process.env.DEBUG !== undefined &&
-        process.env.DEBUG.toLowerCase() !== "false" &&
-        process.env.DEBUG !== "0" &&
-        process.env.DEBUG !== "";
-    if (!(level in pino.levels.values)) {
-        throw new Error(`Invalid log level: ${level}`);
-    }
-    const pinoLogger = pino(
-        {
-            name,
-            level: level,
-        },
-        pino.multistream([
-            {
-                stream: PinoPretty({
-                    sync: false,
-                    colorize: true,
-                    destination: 2,
-                }),
-                level: level,
-            },
-        ])
-    );
-    const logger = debug
-        ? pinoCaller(pinoLogger, { relativeTo: pathLib.dirname(Bun.main) })
-        : pinoLogger;
-    return logger;
+  const level = Deno.env.get("LOG_LEVEL")?.toLowerCase() || "info";
+  const debugEnv = Deno.env.get("DEBUG");
+  const debug = debugEnv !== undefined &&
+    debugEnv.toLowerCase() !== "false" &&
+    debugEnv !== "0" &&
+    debugEnv !== "";
+  if (!(level in pino.levels.values)) {
+    throw new Error(`Invalid log level: ${level}`);
+  }
+  const pinoLogger = pino.pino(
+    {
+      name,
+      level: level,
+    },
+    pino.multistream([
+      {
+        stream: PinoPretty({
+          sync: false,
+          colorize: true,
+          destination: 2,
+        }),
+        level: level,
+      },
+    ]),
+  );
+  const logger = debug
+    ? pinoCaller.pinoCaller(pinoLogger, {
+      relativeTo: pathLib.dirname(Deno.mainModule.replace("file://", "")),
+    })
+    : pinoLogger;
+  return logger;
 }

@@ -1,11 +1,12 @@
 /*
     Functions for generating, caching, and retrieving the salt for the server list
 */
-import { CONFIG_PATH } from "./configs/constants";
-import crypto from "crypto";
+import { CONFIG_PATH } from "./configs/constants.ts";
+import crypto from "node:crypto";
+import { exists } from "@std/fs/exists";
 
 const letters =
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
 /**
  * Get a random cryptographically secure number between min and max
@@ -14,20 +15,20 @@ const letters =
  * @returns
  */
 function randomCryptNumber(min: number, max: number) {
-    if (min >= max) {
-        throw new Error(
-            "The minimum value must be less than the maximum value."
-        );
-    }
+  if (min >= max) {
+    throw new Error(
+      "The minimum value must be less than the maximum value.",
+    );
+  }
 
-    const range = max - min;
-    const randomBytes = crypto.randomBytes(4);
-    const randomNumber = randomBytes.readUInt32BE(0);
+  const range = max - min;
+  const randomBytes = crypto.randomBytes(4);
+  const randomNumber = randomBytes.readUInt32BE(0);
 
-    const scaledRandomNumber =
-        Math.floor((randomNumber / 0xffffffff) * range) + min;
+  const scaledRandomNumber = Math.floor((randomNumber / 0xffffffff) * range) +
+    min;
 
-    return scaledRandomNumber;
+  return scaledRandomNumber;
 }
 
 /**
@@ -36,13 +37,13 @@ function randomCryptNumber(min: number, max: number) {
  * @returns
  */
 export function generateSalt(length = 32): string {
-    const result = [];
-    for (let i = 0; i < length; i++) {
-        result.push(
-            letters.charAt(Math.floor(randomCryptNumber(0, letters.length)))
-        );
-    }
-    return result.join("");
+  const result = [];
+  for (let i = 0; i < length; i++) {
+    result.push(
+      letters.charAt(Math.floor(randomCryptNumber(0, letters.length))),
+    );
+  }
+  return result.join("");
 }
 
 /**
@@ -51,11 +52,10 @@ export function generateSalt(length = 32): string {
  * @param path Path to write the salt to
  */
 export async function writeSalt(
-    salt: string,
-    path = `${CONFIG_PATH}/cachedsalt.txt`
+  salt: string,
+  path = `${CONFIG_PATH}/cachedsalt.txt`,
 ) {
-    const file = Bun.file(path);
-    await file.write(`${salt}\n${Date.now()}`);
+  await Deno.writeTextFile(path, `${salt}\n${Date.now()}`);
 }
 
 /**
@@ -65,18 +65,17 @@ export async function writeSalt(
  * @returns
  */
 export async function getSalt(
-    length = 32,
-    path = `${CONFIG_PATH}/cachedsalt.txt`
+  length = 32,
+  path = `${CONFIG_PATH}/cachedsalt.txt`,
 ): Promise<string> {
-    const file = Bun.file(path);
-    if (await file.exists()) {
-        const data = await file.text();
-        const [salt, lastUsed] = data.split("\n");
-        if (Date.now() - parseInt(lastUsed) <= 300000) {
-            return salt;
-        }
+  if (await exists(path)) {
+    const data = await Deno.readTextFile(path);
+    const [salt, lastUsed] = data.split("\n");
+    if (Date.now() - parseInt(lastUsed) <= 300000) {
+      return salt;
     }
-    const salt = generateSalt(length);
-    writeSalt(salt);
-    return salt;
+  }
+  const salt = generateSalt(length);
+  writeSalt(salt);
+  return salt;
 }

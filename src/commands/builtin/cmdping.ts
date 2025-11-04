@@ -1,16 +1,16 @@
-import { Command } from "commands/command";
-import type Player from "player/player";
+import { Command } from "/commands/command.ts";
+import type Player from "/player/player.ts";
 
 export class CmdPing extends Command {
-    public name = "ping";
-    public description = "Ping pong!";
-    public async execute(player: Player, args: string) {
-        player.sendMessage("Pong!");
-        return true;
-    }
-    public async help(player: Player) {
-        return "Ping pong!";
-    }
+  public name = "ping";
+  public description = "Ping pong!";
+  public async execute(player: Player, args: string) {
+    player.sendMessage("Pong!");
+    return true;
+  }
+  public async help(player: Player) {
+    return "Ping pong!";
+  }
 }
 
 export default CmdPing;

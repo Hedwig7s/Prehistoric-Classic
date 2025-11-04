@@ -23,14 +23,14 @@ export function toFixed(precision: number, num: number): number;
  * @returns The fixed point number or numbers
  */
 export function toFixed(
-    precision: number,
-    num: number | number[]
+  precision: number,
+  num: number | number[],
 ): number | number[] {
-    if (typeof num === "number") {
-        return num >> precision;
-    } else {
-        return num.map((n) => n >> precision);
-    }
+  if (typeof num === "number") {
+    return num >> precision;
+  } else {
+    return num.map((n) => n >> precision);
+  }
 }
 
 /**
@@ -54,12 +54,12 @@ export function fromFixed(precision: number, num: number): number;
  * @returns The floating point number or numbers
  */
 export function fromFixed(
-    precision: number,
-    num: number | number[]
+  precision: number,
+  num: number | number[],
 ): number | number[] {
-    if (typeof num === "number") {
-        return num << precision;
-    } else {
-        return num.map((n) => n << precision);
-    }
+  if (typeof num === "number") {
+    return num << precision;
+  } else {
+    return num.map((n) => n << precision);
+  }
 }

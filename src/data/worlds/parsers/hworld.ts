@@ -15,234 +15,235 @@
     1 byte uint: spawn yaw
     1 byte uint: spawn pitch
     4 byte uint: block data size (v4+)
-    rest of file (or length specified by block data size v4+): block data stored in the following format 
+    rest of file (or length specified by block data size v4+): block data stored in the following format
         Compressed with zlib in v3
         1 byte uint: block id
-        4 byte uint: number of occurences in XZY order (y is up) (same order as minecraft classic) 
+        4 byte uint: number of occurences in XZY order (y is up) (same order as minecraft classic)
 */
-import type WorldParser from "data/worlds/parsers/base";
-import Vector3 from "datatypes/vector3";
-import EntityPosition from "datatypes/entityposition";
-import { StructuredParserBuilder } from "utility/datastruct";
-import zlib from "zlib";
+import type WorldParser from "/data/worlds/parsers/base.ts";
+import Vector3 from "/datatypes/vector3.ts";
+import EntityPosition from "/datatypes/entityposition.ts";
+import { StructuredParserBuilder } from "/utility/datastruct.ts";
+import zlib from "node:zlib";
+import type { Buffer } from "node:buffer";
 
-import type { World } from "data/worlds/world";
+import type { World } from "/data/worlds/world.ts";
 import { concatUint8Arrays } from "uint8array-extras";
 
 interface V2Header {
-    version: number;
-    sizeX: number;
-    sizeY: number;
-    sizeZ: number;
-    spawnX: number;
-    spawnY: number;
-    spawnZ: number;
-    spawnYaw: number;
-    spawnPitch: number;
+  version: number;
+  sizeX: number;
+  sizeY: number;
+  sizeZ: number;
+  spawnX: number;
+  spawnY: number;
+  spawnZ: number;
+  spawnYaw: number;
+  spawnPitch: number;
 }
 interface V4Header {
-    version: number;
-    identifier: string;
-    sizeX: number;
-    sizeY: number;
-    sizeZ: number;
-    spawnX: number;
-    spawnY: number;
-    spawnZ: number;
-    spawnYaw: number;
-    spawnPitch: number;
-    blockDataSize: number;
+  version: number;
+  identifier: string;
+  sizeX: number;
+  sizeY: number;
+  sizeZ: number;
+  spawnX: number;
+  spawnY: number;
+  spawnZ: number;
+  spawnYaw: number;
+  spawnPitch: number;
+  blockDataSize: number;
 }
 interface Block {
-    readonly id: number;
-    readonly count: number;
+  readonly id: number;
+  readonly count: number;
 }
 
 const VERSION_PARSER = new StructuredParserBuilder<{ version: number }>()
-    .littleEndian()
-    .uint32("version")
-    .build();
+  .littleEndian()
+  .uint32("version")
+  .build();
 
 const V2HEADER_PARSER = new StructuredParserBuilder<V2Header>()
-    .littleEndian()
-    .uint32("version")
-    .uint16("sizeX")
-    .uint16("sizeY")
-    .uint16("sizeZ")
-    .uint16("spawnX")
-    .uint16("spawnY")
-    .uint16("spawnZ")
-    .uint8("spawnYaw")
-    .uint8("spawnPitch")
-    .build();
+  .littleEndian()
+  .uint32("version")
+  .uint16("sizeX")
+  .uint16("sizeY")
+  .uint16("sizeZ")
+  .uint16("spawnX")
+  .uint16("spawnY")
+  .uint16("spawnZ")
+  .uint8("spawnYaw")
+  .uint8("spawnPitch")
+  .build();
 
 const V4HEADER_PARSER = new StructuredParserBuilder<V4Header>()
-    .littleEndian()
-    .uint32("version")
-    .fixedString("identifier", 6, "ascii")
-    .uint16("sizeX")
-    .uint16("sizeY")
-    .uint16("sizeZ")
-    .uint16("spawnX")
-    .uint16("spawnY")
-    .uint16("spawnZ")
-    .uint8("spawnYaw")
-    .uint8("spawnPitch")
-    .uint32("blockDataSize")
-    .build();
+  .littleEndian()
+  .uint32("version")
+  .fixedString("identifier", 6, "ascii")
+  .uint16("sizeX")
+  .uint16("sizeY")
+  .uint16("sizeZ")
+  .uint16("spawnX")
+  .uint16("spawnY")
+  .uint16("spawnZ")
+  .uint8("spawnYaw")
+  .uint8("spawnPitch")
+  .uint32("blockDataSize")
+  .build();
 
 const BLOCK_PARSER = new StructuredParserBuilder<Block>()
-    .littleEndian()
-    .uint8("id")
-    .uint32("count")
-    .build();
+  .littleEndian()
+  .uint8("id")
+  .uint32("count")
+  .build();
 const WORLD_VERSION = 4;
 
 function zlibCallbackToPromise<
-    T extends (buf: zlib.InputType, callback: zlib.CompressCallback) => void,
+  T extends (buf: zlib.InputType, callback: zlib.CompressCallback) => void,
 >(func: T): (buf: zlib.InputType) => Promise<Buffer> {
-    return function (buf: zlib.InputType) {
-        return new Promise<Buffer>((resolve, reject) => {
-            func(buf, (error, result) => {
-                if (error) {
-                    reject(error);
-                } else {
-                    resolve(result);
-                }
-            });
-        });
-    };
+  return function (buf: zlib.InputType) {
+    return new Promise<Buffer>((resolve, reject) => {
+      func(buf, (error: string | Error, result: Buffer) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(result);
+        }
+      });
+    });
+  };
 }
 
 function getHeaderParser(
-    version: number
+  version: number,
 ): typeof V4HEADER_PARSER | typeof V2HEADER_PARSER {
-    if (version === 4) {
-        return V4HEADER_PARSER;
-    } else if (version >= 2 && version <= 3) {
-        return V2HEADER_PARSER;
-    } else {
-        throw new Error(`Unsupported hworld version: ${version}`);
-    }
+  if (version === 4) {
+    return V4HEADER_PARSER;
+  } else if (version >= 2 && version <= 3) {
+    return V2HEADER_PARSER;
+  } else {
+    throw new Error(`Unsupported hworld version: ${version}`);
+  }
 }
 
 export default class HWorldParser implements WorldParser {
-    async decode(data: Uint8Array) {
-        const VERSION = VERSION_PARSER.decode(
-            data.subarray(0, VERSION_PARSER.size)
-        ).version;
-        const HEADER_PARSER = getHeaderParser(VERSION);
-        if (HEADER_PARSER.size == undefined) {
-            throw new Error("Invalid parser sizes!");
-        }
-        const HEADER = HEADER_PARSER.decode(
-            data.subarray(0, HEADER_PARSER.size)
-        );
+  async decode(data: Uint8Array) {
+    const VERSION = VERSION_PARSER.decode(
+      data.subarray(0, VERSION_PARSER.size),
+    ).version;
+    const HEADER_PARSER = getHeaderParser(VERSION);
+    if (HEADER_PARSER.size == undefined) {
+      throw new Error("Invalid parser sizes!");
+    }
+    const HEADER = HEADER_PARSER.decode(
+      data.subarray(0, HEADER_PARSER.size),
+    );
 
-        const SIZE = new Vector3(HEADER.sizeX, HEADER.sizeY, HEADER.sizeZ);
-        const SPAWN = new EntityPosition(
-            HEADER.spawnX,
-            HEADER.spawnY,
-            HEADER.spawnZ,
-            HEADER.spawnYaw,
-            HEADER.spawnPitch
-        );
-        const BLOCKS = new Uint8Array(SIZE.product()).fill(0);
-        let compressedBlocks = data.subarray(
-            HEADER_PARSER.size,
-            "blockDataSize" in HEADER
-                ? HEADER_PARSER.size + (HEADER.blockDataSize as number)
-                : undefined
-        );
-        if (VERSION >= 3) {
-            const TEMP_BLOCKS = await zlibCallbackToPromise(zlib.inflate)(
-                compressedBlocks
-            );
-            compressedBlocks = new Uint8Array(
-                TEMP_BLOCKS.buffer,
-                TEMP_BLOCKS.byteOffset,
-                TEMP_BLOCKS.byteLength
-            );
-        }
-        let blockIndex = 0;
-        for (let i = 0; i < compressedBlocks.byteLength; i += 5) {
-            const BLOCK = BLOCK_PARSER.decode(
-                compressedBlocks.subarray(i, i + 5)
-            );
-            for (let j = 0; j < BLOCK.count; j++) {
-                BLOCKS[blockIndex] = BLOCK.id;
-                blockIndex++;
-            }
-        }
-        return {
-            name: "",
-            blocks: BLOCKS,
-            size: SIZE,
-            spawn: SPAWN,
-        };
+    const SIZE = new Vector3(HEADER.sizeX, HEADER.sizeY, HEADER.sizeZ);
+    const SPAWN = new EntityPosition(
+      HEADER.spawnX,
+      HEADER.spawnY,
+      HEADER.spawnZ,
+      HEADER.spawnYaw,
+      HEADER.spawnPitch,
+    );
+    const BLOCKS = new Uint8Array(SIZE.product()).fill(0);
+    let compressedBlocks = data.subarray(
+      HEADER_PARSER.size,
+      "blockDataSize" in HEADER
+        ? HEADER_PARSER.size + (HEADER.blockDataSize as number)
+        : undefined,
+    );
+    if (VERSION >= 3) {
+      const TEMP_BLOCKS = await zlibCallbackToPromise(zlib.inflate)(
+        compressedBlocks,
+      );
+      compressedBlocks = new Uint8Array(
+        TEMP_BLOCKS.buffer,
+        TEMP_BLOCKS.byteOffset,
+        TEMP_BLOCKS.byteLength,
+      );
     }
-    async encode(world: World) {
-        const LEVEL_SIZE = world.size.product();
-        let blocks = new Uint8Array(LEVEL_SIZE).fill(0);
-        let blockOffset = 0;
-        let count = 0;
-        let currentBlock = -1;
-        const writeBlock = function (id: number, count: number) {
-            if (blockOffset + (BLOCK_PARSER.size ?? 5) >= blocks.byteLength) {
-                const newBlocks = new Uint8Array(
-                    blocks.byteLength + 5 * 1024 * 1024
-                ).fill(0);
-                blocks = newBlocks;
-            }
-            blocks.set(
-                BLOCK_PARSER.encode({ id: id, count: count }),
-                blockOffset
-            );
-            blockOffset += 5;
-        };
-        const WORLD_BUFFER = world.blocks;
-        for (let i = 0; i < LEVEL_SIZE; i++) {
-            const block = WORLD_BUFFER[i];
-            if (block === currentBlock) {
-                count++;
-                continue;
-            } else if (count > 0) {
-                writeBlock(currentBlock, count);
-                currentBlock = block;
-                count = 1;
-            } else {
-                currentBlock = block;
-                count = 1;
-            }
-        }
-        if (count > 0) {
-            writeBlock(currentBlock, count);
-        }
-        const TEMP_BLOCKS = await zlibCallbackToPromise(zlib.deflate)(
-            blocks.subarray(0, blockOffset)
-        );
-        const COMPRESSED_BLOCKS = new Uint8Array(
-            TEMP_BLOCKS.buffer,
-            TEMP_BLOCKS.byteOffset,
-            TEMP_BLOCKS.byteLength
-        );
-        const HEADER = V4HEADER_PARSER.encode({
-            version: WORLD_VERSION,
-            identifier: "HWORLD",
-            sizeX: world.size.x,
-            sizeY: world.size.y,
-            sizeZ: world.size.z,
-            spawnX: world.spawn.x,
-            spawnY: world.spawn.y,
-            spawnZ: world.spawn.z,
-            spawnYaw: world.spawn.yaw,
-            spawnPitch: world.spawn.pitch,
-            blockDataSize: COMPRESSED_BLOCKS.byteLength,
-        });
-        const WORLD_DATA: Uint8Array = concatUint8Arrays([
-            HEADER,
-            COMPRESSED_BLOCKS,
-        ]);
-        return WORLD_DATA;
+    let blockIndex = 0;
+    for (let i = 0; i < compressedBlocks.byteLength; i += 5) {
+      const BLOCK = BLOCK_PARSER.decode(
+        compressedBlocks.subarray(i, i + 5),
+      );
+      for (let j = 0; j < BLOCK.count; j++) {
+        BLOCKS[blockIndex] = BLOCK.id;
+        blockIndex++;
+      }
     }
+    return {
+      name: "",
+      blocks: BLOCKS,
+      size: SIZE,
+      spawn: SPAWN,
+    };
+  }
+  async encode(world: World) {
+    const LEVEL_SIZE = world.size.product();
+    let blocks = new Uint8Array(LEVEL_SIZE).fill(0);
+    let blockOffset = 0;
+    let count = 0;
+    let currentBlock = -1;
+    const writeBlock = function (id: number, count: number) {
+      if (blockOffset + (BLOCK_PARSER.size ?? 5) >= blocks.byteLength) {
+        const newBlocks = new Uint8Array(
+          blocks.byteLength + 5 * 1024 * 1024,
+        ).fill(0);
+        blocks = newBlocks;
+      }
+      blocks.set(
+        BLOCK_PARSER.encode({ id: id, count: count }),
+        blockOffset,
+      );
+      blockOffset += 5;
+    };
+    const WORLD_BUFFER = world.blocks;
+    for (let i = 0; i < LEVEL_SIZE; i++) {
+      const block = WORLD_BUFFER[i];
+      if (block === currentBlock) {
+        count++;
+        continue;
+      } else if (count > 0) {
+        writeBlock(currentBlock, count);
+        currentBlock = block;
+        count = 1;
+      } else {
+        currentBlock = block;
+        count = 1;
+      }
+    }
+    if (count > 0) {
+      writeBlock(currentBlock, count);
+    }
+    const TEMP_BLOCKS = await zlibCallbackToPromise(zlib.deflate)(
+      blocks.subarray(0, blockOffset),
+    );
+    const COMPRESSED_BLOCKS = new Uint8Array(
+      TEMP_BLOCKS.buffer,
+      TEMP_BLOCKS.byteOffset,
+      TEMP_BLOCKS.byteLength,
+    );
+    const HEADER = V4HEADER_PARSER.encode({
+      version: WORLD_VERSION,
+      identifier: "HWORLD",
+      sizeX: world.size.x,
+      sizeY: world.size.y,
+      sizeZ: world.size.z,
+      spawnX: world.spawn.x,
+      spawnY: world.spawn.y,
+      spawnZ: world.spawn.z,
+      spawnYaw: world.spawn.yaw,
+      spawnPitch: world.spawn.pitch,
+      blockDataSize: COMPRESSED_BLOCKS.byteLength,
+    });
+    const WORLD_DATA: Uint8Array = concatUint8Arrays([
+      HEADER,
+      COMPRESSED_BLOCKS,
+    ]);
+    return WORLD_DATA;
+  }
 }

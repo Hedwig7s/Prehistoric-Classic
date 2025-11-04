@@ -2,18 +2,18 @@
     Metadata for protocol version 7
 */
 
-import type { Protocol } from "networking/protocol/protocol";
-import { PACKETS } from "./packets";
+import type { Protocol } from "/networking/protocol/protocol.ts";
+import { PACKETS } from "./packets.ts";
 
 export const protocol7: Protocol = {
-    version: 7,
-    packets: PACKETS,
-    checkIdentifier(identifier: Uint8Array): boolean {
-        try {
-            return identifier[1] === this.version;
-        } catch {
-            return false;
-        }
-    },
+  version: 7,
+  packets: PACKETS,
+  checkIdentifier(identifier: Uint8Array): boolean {
+    try {
+      return identifier[1] === this.version;
+    } catch {
+      return false;
+    }
+  },
 };
 export default protocol7;

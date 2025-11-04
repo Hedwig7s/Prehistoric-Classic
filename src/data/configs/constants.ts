@@ -8,7 +8,7 @@ export const CONFIG_PATH = "./config";
  * The default configurations for the server.
  */
 export const DEFAULT_CONFIGS = {
-    server: (await import("data/configs/server")).default,
+  server: (await import("/data/configs/server.ts")).default,
 };
 
 /**
@@ -16,13 +16,13 @@ export const DEFAULT_CONFIGS = {
  * TODO: Potentially move to a more dynamic system as plugins may want to register a protocol
  */
 export const PROTOCOLS = {
-    [0x07]: (await import("networking/protocol/7/protocol")).protocol7,
+  [0x07]: (await import("/networking/protocol/7/protocol.ts")).protocol7,
 };
 
 /**
  * The metadata for the server.
  */
 export const METADATA = {
-    version: "v0.2.1-alpha",
-    softwareName: "Stuffed-Classic",
+  version: "v0.2.1-alpha",
+  softwareName: "Prehistoric-Classic",
 };

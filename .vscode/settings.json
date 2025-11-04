@@ -9,5 +9,15 @@
     ".history": true
   },
   "explorerExclude.backup": {},
-  "workbench.localHistory.enabled": false
+  "workbench.localHistory.enabled": false,
+  "workbench.colorCustomizations": {
+    "terminal.background": "#00000000"
+  },
+  "deno.enable": true,
+  "deno.lint": true,
+  "editor.formatOnSave": true,
+  "[typescript]": {
+    "editor.defaultFormatter": "denoland.vscode-deno"
+  },
+  "typescript.tsserver.experimental.enableProjectDiagnostics": false
 }

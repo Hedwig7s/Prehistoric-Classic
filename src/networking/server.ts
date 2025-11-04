@@ -1,126 +1,86 @@
 /*
     Handles opening connections
 */
-import type { TCPSocketListener } from "bun";
-import type { Protocol } from "networking/protocol/protocol";
-import { getSimpleLogger } from "utility/logger";
-import { ServiceRegistry } from "utility/serviceregistry";
-import type { ServiceMap } from "servercontext";
-import type TypedEventEmitter from "typed-emitter";
-import EventEmitter from "events";
-import { Connection } from "networking/connection";
-
-export interface SocketData {
-    connection: Connection;
-}
+import type { Protocol } from "/networking/protocol/protocol.ts";
+import { getSimpleLogger } from "/utility/logger.ts";
+import { ServiceRegistry } from "/utility/serviceregistry.ts";
+import type { ServiceMap } from "/servercontext.ts";
+import { EventEmitter } from "@denosaurs/event";
+import { Connection } from "/networking/connection.ts";
 
 /** Events emitted by the server */
 // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 type ServerEvents = {
-    close: () => void;
+  close: [];
 };
 
 /**
  * A TCP server that handles accepting connections and creating Connection instances
  */
 export class Server {
-    server?: TCPSocketListener;
-    public host?: string;
-    public port?: number;
-    public connectionCount = 0;
-    public closed = false;
-    public readonly logger = getSimpleLogger("Server");
-    public readonly emitter =
-        new EventEmitter() as TypedEventEmitter<ServerEvents>;
+  server?: Deno.TcpListener;
+  public host?: string;
+  public port?: number;
+  public connectionCount = 0;
+  public closed = false;
+  public readonly logger = getSimpleLogger("Server");
+  public readonly emitter = new EventEmitter<ServerEvents>();
 
-    public connections = new Map<number, Connection>();
+  public connections = new Map<number, Connection>();
 
-    constructor(
-        public readonly protocols: Record<number, Protocol>,
-        public readonly serviceRegistry: ServiceRegistry<ServiceMap>
-    ) {}
-
-    /**
-     * Starts the server
-     * @param host The host address to bind to
-     * @param port The port to bind to
-     */
-    start(host: string, port: number) {
-        this.host = host;
-        this.port = port;
-
-        this.server = Bun.listen<SocketData>({
-            hostname: this.host,
-            port: this.port,
-            socket: {
-                data: (socket, data) => {
-                    try {
-                        socket.data.connection?.bufferIncoming(
-                            new Uint8Array(data)
-                        );
-                        if (socket.data.connection)
-                            socket.data.connection.packetCooldown.count++;
-                    } catch {
-                        socket.end();
-                    }
-                },
-                close: (socket) => {
-                    try {
-                        this.logger.info(
-                            `Socket ${socket.data.connection?.id} closed`
-                        );
-                        socket.data.connection?.close();
-                    } catch (error) {
-                        this.logger.error(error);
-                    }
-                },
-                error: (socket, error) =>
-                    this.logger.warn(`Socket error: ${error}`),
-                open: (socket) => {
-                    try {
-                        const id = this.connectionCount++;
-                        socket.data = {
-                            connection: new Connection(
-                                socket,
-                                id,
-                                this.protocols,
-                                this.serviceRegistry
-                            ),
-                        };
-                        this.connections.set(id, socket.data.connection);
-                        socket.data.connection.emitter.on("close", () => {
-                            this.connections.delete(id);
-                        });
-                        this.logger.info("Socket connected");
-                    } catch (error) {
-                        this.logger.error(error);
-                        socket.end();
-                    }
-                },
-                drain: (socket) => {
-                    try {
-                        socket.data.connection?.processOutgoing();
-                    } catch (error) {
-                        this.logger.error(error);
-                        socket.end();
-                    }
-                },
-            },
-        });
-
-        this.logger.info(`Server started at ${this.host}:${this.port}`);
+  constructor(
+    public readonly protocols: Record<number, Protocol>,
+    public readonly serviceRegistry: ServiceRegistry<ServiceMap>,
+  ) {}
+  handleConnection(conn: Deno.TcpConn) {
+    const connection = new Connection(
+      conn,
+      this.connectionCount++,
+      this.protocols,
+      this.serviceRegistry,
+    );
+    this.connections.set(connection.id, connection);
+    connection.emitter.on("close", () => {
+      this.connections.delete(connection.id);
+    });
+    this.logger.info("Socket connected");
+  }
+  async handleConnections() {
+    if (!this.server) return;
+    for await (const conn of this.server) {
+      if (this.closed) break;
+      this.handleConnection(conn);
     }
+  }
+  /**
+   * Starts the server
+   * @param host The host address to bind to
+   * @param port The port to bind to
+   */
+  start(host: string, port: number) {
+    this.host = host;
+    this.port = port;
 
-    /**
-     * Closes the server
-     */
-    close() {
-        if (this.closed) return;
-        this.emitter.emit("close");
-        this.server?.stop();
-        this.closed = true;
-        this.logger.info("Server stopped");
-    }
+    this.server = Deno.listen({
+      hostname: this.host,
+      port: this.port,
+      transport: "tcp",
+    });
+
+    this.logger.info(`Server started at ${this.host}:${this.port}`);
+    this.handleConnections();
+  }
+
+  /**
+   * Closes the server
+   */
+  close() {
+    if (this.closed) return;
+    this.emitter.emit("close");
+    this.server?.close();
+    this.closed = true;
+    this.logger.info("Server stopped");
+  }
 }
 
 export default Server;

@@ -1,8 +1,8 @@
 /*
     Couple utility functions for packets
 */
-import type { Protocol } from "networking/protocol/protocol";
-import type { StructuredDataParser as BinaryParser } from "utility/datastruct";
+import type { Protocol } from "/networking/protocol/protocol.ts";
+import type { StructuredDataParser as BinaryParser } from "/utility/datastruct.ts";
 
 /** Types of packets */
 type PacketTypes = "Sendable" | "Receivable" | "Bidirectional" | "None";
@@ -16,28 +16,28 @@ type PacketTypes = "Sendable" | "Receivable" | "Bidirectional" | "None";
  * @throws If the packet does not exist or is not of the correct type
  */
 export function assertPacket<K extends keyof Protocol["packets"]>(
-    protocol: Protocol | undefined,
-    id: K,
-    type: PacketTypes = "None"
+  protocol: Protocol | undefined,
+  id: K,
+  type: PacketTypes = "None",
 ) {
-    if (protocol == null) {
-        throw new Error("Protocol not assigned");
-    }
-    const packet = protocol.packets[id];
-    if (packet == null) {
-        throw new Error(`Packet ${id.toString()} not found`);
-    }
-    if (["Sendable", "Bidirectional"].includes(type) && packet.send == null) {
-        throw new Error(`Packet ${id.toString()} is not sendable`);
-    }
-    if (
-        ["Receivable", "Bidirectional"].includes(type) &&
-        packet.receive == null
-    ) {
-        throw new Error(`Packet ${id.toString()} is not receivable`);
-    }
+  if (protocol == null) {
+    throw new Error("Protocol not assigned");
+  }
+  const packet = protocol.packets[id];
+  if (packet == null) {
+    throw new Error(`Packet ${id.toString()} not found`);
+  }
+  if (["Sendable", "Bidirectional"].includes(type) && packet.send == null) {
+    throw new Error(`Packet ${id.toString()} is not sendable`);
+  }
+  if (
+    ["Receivable", "Bidirectional"].includes(type) &&
+    packet.receive == null
+  ) {
+    throw new Error(`Packet ${id.toString()} is not receivable`);
+  }
 
-    return packet;
+  return packet;
 }
 
 /**
@@ -47,11 +47,11 @@ export function assertPacket<K extends keyof Protocol["packets"]>(
  * @throws If the parser does not exist or does not have a size
  */
 export function assertParserSize(parser?: BinaryParser<any>): number {
-    if (!parser) {
-        throw new Error("No parser");
-    }
-    if (parser.size === undefined) {
-        throw new Error("No parser size");
-    }
-    return parser.size;
+  if (!parser) {
+    throw new Error("No parser");
+  }
+  if (parser.size === undefined) {
+    throw new Error("No parser size");
+  }
+  return parser.size;
 }

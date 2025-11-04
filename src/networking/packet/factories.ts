@@ -1,27 +1,30 @@
 import type {
-    BidirectionalPacket,
-    Packet,
-    ReceivablePacket,
-    SendablePacket,
-} from "networking/packet/packet";
-import { assertParserSize } from "networking/packet/utilities";
-import type { PacketData } from "networking/packet/packetdata";
-import type { Connection } from "networking/connection";
+  BidirectionalPacket,
+  Packet,
+  ReceivablePacket,
+  SendablePacket,
+} from "/networking/packet/packet.ts";
+import { assertParserSize } from "/networking/packet/utilities.ts";
+import type { PacketData } from "/networking/packet/packetdata.ts";
+import type { Connection } from "/networking/connection.ts";
 
-type PartialPacketSize<T extends PacketData> = Omit<Packet<T>, "size"> &
-    Partial<Pick<Packet<T>, "size">>;
+type PartialPacketSize<T extends PacketData> =
+  & Omit<Packet<T>, "size">
+  & Partial<Pick<Packet<T>, "size">>;
 
-type PartialSendablePacket<T extends PacketData> = Omit<
+type PartialSendablePacket<T extends PacketData> =
+  & Omit<
     SendablePacket<T>,
     "size" | "send"
-> &
-    Partial<Pick<SendablePacket<T>, "size" | "send">>;
+  >
+  & Partial<Pick<SendablePacket<T>, "size" | "send">>;
 
-type PartialReceivablePacket<T extends PacketData> = Omit<
+type PartialReceivablePacket<T extends PacketData> =
+  & Omit<
     ReceivablePacket<T>,
     "size"
-> &
-    Partial<Pick<ReceivablePacket<T>, "size">>;
+  >
+  & Partial<Pick<ReceivablePacket<T>, "size">>;
 
 /**
  * Create a basic packet without a sender or receiver with the given data
@@ -29,12 +32,12 @@ type PartialReceivablePacket<T extends PacketData> = Omit<
  * @template T The type of the packet data
  */
 export function createBasicPacket<T extends PacketData>(
-    obj: PartialPacketSize<T>
+  obj: PartialPacketSize<T>,
 ): Packet<T> {
-    return {
-        ...obj,
-        size: obj.size ?? assertParserSize(obj.parser),
-    } as Packet<T>;
+  return {
+    ...obj,
+    size: obj.size ?? assertParserSize(obj.parser),
+  } as Packet<T>;
 }
 
 /**
@@ -43,12 +46,12 @@ export function createBasicPacket<T extends PacketData>(
  * @template T The type of the packet data
  */
 export function createReceivablePacket<T extends PacketData>(
-    obj: PartialReceivablePacket<T>
+  obj: PartialReceivablePacket<T>,
 ): ReceivablePacket<T> {
-    return {
-        ...createBasicPacket(obj),
-        receive: obj.receive,
-    };
+  return {
+    ...createBasicPacket(obj),
+    receive: obj.receive,
+  };
 }
 
 /**
@@ -59,13 +62,13 @@ export function createReceivablePacket<T extends PacketData>(
  * @template T The type of the packet data
  */
 async function basicSender<T extends PacketData>(
-    this: SendablePacket<T>,
-    connection: Connection,
-    data: Omit<T, "id">
+  this: SendablePacket<T>,
+  connection: Connection,
+  data: Omit<T, "id">,
 ): Promise<void> {
-    const newData = { ...data, id: this.id } as T;
-    const encoded = this.parser.encode(newData);
-    await connection.write(encoded);
+  const newData = { ...data, id: this.id } as T;
+  const encoded = this.parser.encode(newData);
+  await connection.write(encoded);
 }
 
 /**
@@ -74,11 +77,11 @@ async function basicSender<T extends PacketData>(
  * @template T The type of the packet data
  */
 export function createSendablePacket<T extends PacketData>(
-    obj: PartialSendablePacket<T>
+  obj: PartialSendablePacket<T>,
 ): SendablePacket<T> {
-    const newObj = { ...createBasicPacket(obj) };
-    newObj.send = obj.send ?? basicSender.bind(newObj as SendablePacket<any>);
-    return newObj as SendablePacket<T>;
+  const newObj = { ...createBasicPacket(obj) };
+  newObj.send = obj.send ?? basicSender.bind(newObj as SendablePacket<any>);
+  return newObj as SendablePacket<T>;
 }
 
 /**
@@ -87,10 +90,10 @@ export function createSendablePacket<T extends PacketData>(
  * @template T The type of the packet data
  */
 export function createBidirectionalPacket<T extends PacketData>(
-    obj: PartialReceivablePacket<T> & PartialSendablePacket<T>
+  obj: PartialReceivablePacket<T> & PartialSendablePacket<T>,
 ): BidirectionalPacket<T> {
-    return {
-        ...createReceivablePacket(obj),
-        ...createSendablePacket(obj),
-    } as BidirectionalPacket<T>;
+  return {
+    ...createReceivablePacket(obj),
+    ...createSendablePacket(obj),
+  } as BidirectionalPacket<T>;
 }

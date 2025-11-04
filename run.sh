@@ -1,0 +1,1 @@
+deno run --allow-net --allow-sys=hostname --allow-read=. --allow-write=. --allow-env --env-file  main.ts
