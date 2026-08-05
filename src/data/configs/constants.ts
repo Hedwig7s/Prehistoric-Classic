@@ -24,5 +24,5 @@ export const PROTOCOLS = {
  */
 export const METADATA = {
     version: "v0.2.1-alpha",
-    softwareName: "Stuffed-Classic",
+    softwareName: "Nubbin-Classic",
 };

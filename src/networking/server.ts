@@ -1,7 +1,6 @@
 /*
     Handles opening connections
 */
-import type { TCPSocketListener } from "bun";
 import type { Protocol } from "networking/protocol/protocol";
 import { getSimpleLogger } from "utility/logger";
 import { ServiceRegistry } from "utility/serviceregistry";
@@ -9,10 +8,8 @@ import type { ServiceMap } from "servercontext";
 import type TypedEventEmitter from "typed-emitter";
 import EventEmitter from "events";
 import { Connection } from "networking/connection";
-
-export interface SocketData {
-    connection: Connection;
-}
+import { Server as TCPServer } from "net";
+import * as net from "net";
 
 /** Events emitted by the server */
 // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
@@ -24,7 +21,7 @@ type ServerEvents = {
  * A TCP server that handles accepting connections and creating Connection instances
  */
 export class Server {
-    server?: TCPSocketListener;
+    server?: TCPServer;
     public host?: string;
     public port?: number;
     public connectionCount = 0;
@@ -38,7 +35,7 @@ export class Server {
     constructor(
         public readonly protocols: Record<number, Protocol>,
         public readonly serviceRegistry: ServiceRegistry<ServiceMap>
-    ) {}
+    ) { }
 
     /**
      * Starts the server
@@ -49,64 +46,64 @@ export class Server {
         this.host = host;
         this.port = port;
 
-        this.server = Bun.listen<SocketData>({
-            hostname: this.host,
-            port: this.port,
-            socket: {
-                data: (socket, data) => {
+        this.server = net.createServer((socket) => {
+            try {
+                const id = this.connectionCount++;
+                const connection = new Connection(
+                    socket,
+                    id,
+                    this.protocols,
+                    this.serviceRegistry
+                );
+
+                this.connections.set(id, connection);
+                connection.emitter.on("close", () => {
+                    this.connections.delete(id);
+                });
+                socket.on("data", (data) => {
                     try {
-                        socket.data.connection?.bufferIncoming(
-                            new Uint8Array(data)
+                        if (typeof data == "string") {
+                            data = Buffer.from(data);
+                        }
+                        connection.bufferIncoming(
+                            data
                         );
-                        if (socket.data.connection)
-                            socket.data.connection.packetCooldown.count++;
+                        if (connection)
+                            connection.packetCooldown.count++;
                     } catch {
                         socket.end();
                     }
-                },
-                close: (socket) => {
+
+                });
+                socket.on("error", (error) => {
+                    this.logger.warn(`Socket error: ${error}`);
+                });
+                socket.on("drain", () => {
+                    try {
+                        connection.processOutgoing();
+                    } catch (error) {
+                        this.logger.error(error);
+                        socket.end();
+                    }
+                });
+                socket.on("close", () => {
                     try {
                         this.logger.info(
-                            `Socket ${socket.data.connection?.id} closed`
+                            `Socket ${connection.id} closed`
                         );
-                        socket.data.connection?.close();
+                        connection.close();
                     } catch (error) {
                         this.logger.error(error);
                     }
-                },
-                error: (socket, error) =>
-                    this.logger.warn(`Socket error: ${error}`),
-                open: (socket) => {
-                    try {
-                        const id = this.connectionCount++;
-                        socket.data = {
-                            connection: new Connection(
-                                socket,
-                                id,
-                                this.protocols,
-                                this.serviceRegistry
-                            ),
-                        };
-                        this.connections.set(id, socket.data.connection);
-                        socket.data.connection.emitter.on("close", () => {
-                            this.connections.delete(id);
-                        });
-                        this.logger.info("Socket connected");
-                    } catch (error) {
-                        this.logger.error(error);
-                        socket.end();
-                    }
-                },
-                drain: (socket) => {
-                    try {
-                        socket.data.connection?.processOutgoing();
-                    } catch (error) {
-                        this.logger.error(error);
-                        socket.end();
-                    }
-                },
-            },
+
+                });
+                this.logger.info("Socket connected");
+            } catch (error) {
+                this.logger.error(error);
+                socket.end();
+            }
         });
+        this.server.listen(this.port, this.host);
 
         this.logger.info(`Server started at ${this.host}:${this.port}`);
     }
@@ -117,7 +114,7 @@ export class Server {
     close() {
         if (this.closed) return;
         this.emitter.emit("close");
-        this.server?.stop();
+        this.server?.close();
         this.closed = true;
         this.logger.info("Server stopped");
     }

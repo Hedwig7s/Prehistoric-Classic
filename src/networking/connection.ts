@@ -1,8 +1,7 @@
 /*
     Handles traffic between the server and the client
 */
-import type { Socket } from "bun";
-import { ArrayBufferSink } from "bun";
+import type { Socket } from "net";
 import type { Protocol } from "networking/protocol/protocol";
 import {
     PacketIds,
@@ -16,7 +15,7 @@ import { ServiceRegistry } from "utility/serviceregistry";
 import type { ServiceMap } from "servercontext";
 import type TypedEventEmitter from "typed-emitter";
 import EventEmitter from "events";
-import type { SocketData } from "./server";
+import ArrayBufferSink from "utility/arraybuffersink";
 
 /** An object defining how many of x has been seen since last checked */
 interface Cooldown {
@@ -47,27 +46,20 @@ export class Connection {
     public lastDataReceived = Date.now();
     /**
      * Creates a new connection
-     * @param socket The Bun TCP socket to the client
+     * @param socket The TCP socket to the client
      * @param id The unique identifier for this connection
      * @param protocols The available protocols
      * @param serviceRegistry Registry of services
      */
     constructor(
-        public readonly socket: Socket<SocketData>,
+        public readonly socket: Socket,
         public readonly id: number,
         public readonly protocols: Record<number, Protocol>,
         public readonly serviceRegistry: ServiceRegistry<ServiceMap>
     ) {
         this.logger = getSimpleLogger(`Connection ${id}`);
-        const sinkSettings = {
-            highWaterMark: 1024,
-            stream: true,
-            asUint8Array: true,
-        };
-        this.receivedBuffer = new ArrayBufferSink();
-        this.receivedBuffer.start(sinkSettings);
-        this.toSendBuffer = new ArrayBufferSink();
-        this.toSendBuffer.start(sinkSettings);
+        this.receivedBuffer = new ArrayBufferSink(10000000, 2048);
+        this.toSendBuffer = new ArrayBufferSink(10000000, 10240);
 
         setTimeout(() => {
             if (!this.protocol && !this.closed) {
@@ -103,7 +95,7 @@ export class Connection {
     }
 
     /** Write data to the client */
-    async write(data: string | ArrayBuffer | Bun.BufferSource) {
+    async write(data: ArrayBuffer) {
         if (this.closed) throw new Error("Connection was closed");
         this.toSendBuffer.write(data);
         await this.processOutgoing().catch(this.onError.bind(this));
@@ -112,20 +104,20 @@ export class Connection {
     /** Process outgoing data, sending it to the client */
     async processOutgoing() {
         if (this.closed) return;
-        const data = this.toSendBuffer.flush() as Uint8Array;
-        const wrote = await this.socket.write(data);
-        if (wrote < data.byteLength) {
+        const data = this.toSendBuffer.flush();
+        this.socket.write(data);
+        /*if (wrote < data.byteLength) {
             const flushed = this.toSendBuffer.flush() as Uint8Array;
             const subarray = data.subarray(wrote);
             this.toSendBuffer.write(subarray);
             if (flushed.length > 0) this.toSendBuffer.write(flushed);
-        }
+        }*/
     }
     /** Buffer incoming data from the client */
     bufferIncoming(data: Uint8Array) {
         if (this.closed) return;
         this.lastDataReceived = Date.now();
-        this.receivedBuffer.write(data);
+        this.receivedBuffer.write(data.buffer);
         this.processIncoming().catch(this.onError.bind(this));
     }
 
@@ -137,15 +129,15 @@ export class Connection {
                 if (retry) {
                     this.bufferIncoming(data);
                 } else {
-                    this.receivedBuffer.write(data);
+                    this.receivedBuffer.write(data.buffer);
                 }
                 return;
             }
-            this.receivedBuffer.write(data);
+            this.receivedBuffer.write(data.buffer);
             if (retry) {
                 this.bufferIncoming(flushed);
             } else {
-                this.receivedBuffer.write(flushed);
+                this.receivedBuffer.write(flushed.buffer);
             }
         };
         const data = this.receivedBuffer.flush() as Uint8Array<ArrayBuffer>;
@@ -217,8 +209,8 @@ export class Connection {
             if (this.socket.readyState !== "closed") {
                 this.socket.end();
                 setTimeout(() => {
-                    if (this.socket.readyState !== "closed")
-                        this.socket.terminate();
+                    if (!this.socket.closed)
+                        this.socket.destroy();
                 }, 1000);
             }
         } catch (error) {

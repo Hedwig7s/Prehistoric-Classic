@@ -3,6 +3,7 @@
 */
 import { CONFIG_PATH } from "./configs/constants";
 import crypto from "crypto";
+import fs from "fs/promises";
 
 const letters =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -54,8 +55,7 @@ export async function writeSalt(
     salt: string,
     path = `${CONFIG_PATH}/cachedsalt.txt`
 ) {
-    const file = Bun.file(path);
-    await file.write(`${salt}\n${Date.now()}`);
+    await fs.writeFile(path, `${salt}\n${Date.now()}`);
 }
 
 /**
@@ -68,9 +68,15 @@ export async function getSalt(
     length = 32,
     path = `${CONFIG_PATH}/cachedsalt.txt`
 ): Promise<string> {
-    const file = Bun.file(path);
-    if (await file.exists()) {
-        const data = await file.text();
+    let data: string | null = null;
+    try {
+        data = await fs.readFile(path, "utf8");
+    } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== "ENOENT") {
+            throw e;
+        }
+    }
+    if (data !== null) {
         const [salt, lastUsed] = data.split("\n");
         if (Date.now() - parseInt(lastUsed) <= 300000) {
             return salt;

@@ -35,6 +35,7 @@ import {
 } from "networking/packet/packetdata";
 import EntityPosition from "datatypes/entityposition";
 import { sanitizeNetworkString } from "utility/sanitizenetworkstring";
+import * as crypto from "crypto";
 
 const PROTOCOL_VERSION = 7;
 
@@ -68,17 +69,19 @@ export const identificationPacket7 =
                 serverConfig?.data.server.verifyNames;
             const isLocalConnection =
                 ["localhost", "127.0.0.1"].includes(
-                    connection.socket.remoteAddress
-                ) || connection.socket.remoteAddress.startsWith("192.168.");
+                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                    connection.socket.remoteAddress!
+                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                ) || connection.socket.remoteAddress!.startsWith("192.168.");
             const isUnverifiedLocalNamesAllowed =
                 serverConfig?.data.server.allowUnverifiedLocalNames;
             const isNameVerified =
                 (heartbeat?.salt &&
                     sanitizeNetworkString(decoded.keyOrMotd).toLowerCase() ===
-                        new Bun.CryptoHasher("md5")
-                            .update(heartbeat.salt + playerName)
-                            .digest("hex")
-                            .toLowerCase()) ||
+                    crypto.createHash("md5")
+                        .update(heartbeat.salt + playerName)
+                        .digest("hex")
+                        .toLowerCase()) ||
                 !heartbeat?.salt;
 
             if (
@@ -111,8 +114,8 @@ export const identificationPacket7 =
             }
             clientPacket.send(connection, {
                 protocol: PROTOCOL_VERSION,
-                name: "Stuffed Classic",
-                keyOrMotd: "A stuffed classic server",
+                name: "Nubbin Classic",
+                keyOrMotd: "A nubbin classic server",
                 userType: 0,
             });
             const worldRegistry =

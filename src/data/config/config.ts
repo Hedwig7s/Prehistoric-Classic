@@ -2,7 +2,7 @@
  * Config wrapper for loading and saving from multiple formats.
  */
 
-import { exists, mkdir } from "fs/promises";
+import { mkdir } from "fs/promises";
 import { join as joinPath } from "path";
 import {
     handlers,
@@ -11,6 +11,7 @@ import {
 import { CONFIG_PATH } from "data/configs/constants";
 import type pino from "pino";
 import { getSimpleLogger } from "utility/logger";
+import fs from "fs/promises";
 
 export type ConfigData = Record<string | symbol, any>;
 
@@ -50,9 +51,9 @@ function verifyConfigKey(
 ): boolean {
     return new Boolean(
         key &&
-            key in config &&
-            key in defaultConfig &&
-            verifyConfigValues(config[key], defaultConfig[key])
+        key in config &&
+        key in defaultConfig &&
+        verifyConfigValues(config[key], defaultConfig[key])
     ).valueOf();
 }
 
@@ -270,10 +271,8 @@ export class Config<T extends ConfigData = ConfigData> {
             null,
             4
         );
-        if (!(await exists(CONFIG_PATH))) {
-            await mkdir(CONFIG_PATH);
-        }
-        await Bun.write(this.getPath(), encoded);
+        await mkdir(CONFIG_PATH, { recursive: true });
+        await fs.writeFile(this.getPath(), encoded);
     }
 
     /**
@@ -291,7 +290,7 @@ export class Config<T extends ConfigData = ConfigData> {
         try {
             parsed = handler.handler.parse(data) as ConfigData;
         } catch (error) {
-            this.logger.warn("Failed to load config!", error);
+            this.logger.warn("Failed to load config!", error as any);
             return;
         }
         const parseObj = (
@@ -328,11 +327,17 @@ export class Config<T extends ConfigData = ConfigData> {
         for (const handler of Object.values(handlers)) {
             if (handler === this.fileHandler) continue;
             const path = this.getPath(handler.extension);
-            const file = Bun.file(path);
-            if (await file.exists()) {
-                const data = await file.text();
+            let data: string | null = null;
+            try {
+                data = await fs.readFile(path, "utf8");
+            } catch (e) {
+                if ((e as NodeJS.ErrnoException).code !== "ENOENT") {
+                    throw e;
+                }
+            }
+            if (data !== null) {
                 this._load(data, handler);
-                await file.delete();
+                await fs.unlink(path);
                 return true;
             }
         }
@@ -347,15 +352,22 @@ export class Config<T extends ConfigData = ConfigData> {
      */
     public async load(): Promise<void> {
         const path = this.getPath();
-        if (!(await exists(path))) {
-            const found = await this.checkForOtherFormats();
-            if (!found) {
-                this.save();
+        let data: string | null = null;
+        try {
+            data = await fs.readFile(path, "utf8");
+        } catch (e) {
+            if ((e as NodeJS.ErrnoException).code !== "ENOENT") {
+                throw e;
             }
+        } if (data !== null) {
+            this._load(data);
             return;
         }
-        const data = await Bun.file(path).text();
-        this._load(data);
+        const found = await this.checkForOtherFormats();
+        if (!found) {
+            this.save();
+        }
+        return;
     }
 }
 

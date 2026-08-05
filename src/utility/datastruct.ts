@@ -1,7 +1,7 @@
 /*
     Encoder and decoder for structured data that allows for 2 way conversion between binary data and structured data
 */
-import * as iconv from "iconv-lite";
+import iconv from "iconv-lite";
 
 export type ValidBinaryValues = string | number | bigint | Uint8Array;
 
@@ -243,7 +243,7 @@ export class StructuredDataParser<T extends StructDataFormat<T>> {
         }
 
         this.verifyDecoded(decoded);
-        
+
         return decoded;
     }
 
@@ -291,7 +291,7 @@ export class StructuredDataParser<T extends StructDataFormat<T>> {
             }
             case "string": {
                 const stringFormat = format as StringFormat<T>;
-                const decode = function (slice: Uint8Array): string {
+                const decode = function(slice: Uint8Array): string {
                     return new TextDecoder(stringFormat.encoding).decode(slice);
                 };
                 switch (stringFormat.type) {

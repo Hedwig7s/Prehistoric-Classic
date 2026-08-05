@@ -5,7 +5,7 @@ import Vector3 from "datatypes/vector3";
 import EntityPosition from "datatypes/entityposition";
 import HWorldParser from "data/worlds/parsers/hworld";
 import zlib from "zlib";
-import fs from "fs";
+import fs from "fs/promises";
 import * as pathlib from "path";
 import type { Entity } from "entities/entity";
 import type WorldRegistry from "./worldregistry";
@@ -18,6 +18,7 @@ import { PacketIds } from "networking/packet/packet";
 import PlayerEntity from "entities/playerentity";
 import type { DEFAULT_CONFIGS } from "data/configs/constants";
 import type { Config } from "data/config/config";
+import { existsSync } from "fs";
 
 /**
  * Options for creating a new world instance.
@@ -103,12 +104,13 @@ export class World {
         parserClass,
         serverConfig: config,
     }: WorldFromFileOptions): Promise<World> {
-        if (!(await fs.promises.exists(filePath))) {
+        if (!existsSync(filePath)) {
             throw new Error("File not found.");
         }
         // eslint-disable-next-line @typescript-eslint/naming-convention
         const WorldParser = parserClass ?? HWorldParser;
-        const data = await Bun.file(filePath).bytes();
+        const readData = await fs.readFile(filePath, "binary");
+        const data = Buffer.from(readData);
         const worldParser = new WorldParser();
         const options = (await worldParser.decode(data)) as WorldOptions;
         options.name =
@@ -206,7 +208,7 @@ export class World {
             }, 20000);
             let sendingData = false;
             let queuePad = false;
-            const sendData = function (pad = false) {
+            const sendData = function(pad = false) {
                 if (!callback) return;
                 if (sendingData) {
                     queuePad = queuePad || pad;
@@ -356,8 +358,8 @@ export class World {
         if (saveDirectory == null) {
             throw new Error("World save directory not set");
         }
-        await fs.promises.mkdir(saveDirectory, { recursive: true });
-        await fs.promises.writeFile(
+        await fs.mkdir(saveDirectory, { recursive: true });
+        await fs.writeFile(
             `${saveDirectory}/${this.name}.hworld`,
             ENCODED
         );

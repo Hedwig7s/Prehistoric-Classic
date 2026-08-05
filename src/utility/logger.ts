@@ -39,7 +39,7 @@ export function getSimpleLogger(name?: string) {
         ])
     );
     const logger = debug
-        ? pinoCaller(pinoLogger, { relativeTo: pathLib.dirname(Bun.main) })
+        ? pinoCaller(pinoLogger, { relativeTo: pathLib.dirname(require.main?.filename ?? "unknown") })
         : pinoLogger;
     return logger;
 }
